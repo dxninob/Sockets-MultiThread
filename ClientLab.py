@@ -20,7 +20,7 @@ def main():
     print('Input commands:')
     command_to_send = input()
 
-    while command_to_send != constants.QUIT:
+    while True:
         client_socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         client_socket.connect((constants.IP_SERVER,constants.PORT))
         if command_to_send == '':
@@ -28,52 +28,46 @@ def main():
             command_to_send = input()    
         elif (command_to_send == constants.QUIT):
             break
-        elif (command_to_send.startswith(constants.GET) or command_to_send.startswith(constants.DELETE) or command_to_send.startswith(constants.POST) or command_to_send.startswith(constants.HEAD)):
+        else:
             command_to_send += '\r\n\r\n'
             client_socket.send(bytes(command_to_send,constants.ENCONDING_FORMAT))
             file_content = b''
             while True:
                 data_received = client_socket.recv(constants.RECV_BUFFER_SIZE)
+                # print(data_received)
                 if (len(data_received) < 1): break
                 time.sleep(0.25)
                 file_content = file_content + data_received
-            header_length = file_content.find(b'\r\n\r\n')
-            header = file_content[:header_length+4].decode(constants.ENCONDING_FORMAT)
+            response = file_content.split(b'\r\n\r\n')
+            header = response[0].decode(constants.ENCONDING_FORMAT)
             print(header)
-            f_name = file_name(header, command_to_send) 
-            file_content = file_content[header_length+4:]
-            f = open(f_name, 'wb')
-            f.write(file_content)
-            f.close()
-            command_to_send = input()
-        elif (command_to_send.startswith(constants.PUT)):
-            command_to_send += '\r\n\r\n'
-            client_socket.send(bytes(command_to_send,constants.ENCONDING_FORMAT))
-            data_received = client_socket.recv(constants.RECV_BUFFER_SIZE)        
-            print(data_received.decode(constants.ENCONDING_FORMAT))
-            command_to_send = input()
-        else:
-            command_to_send += '\r\n\r\n'
-            client_socket.send(bytes(command_to_send,constants.ENCONDING_FORMAT))
-            data_received = client_socket.recv(constants.RECV_BUFFER_SIZE)        
-            print(data_received.decode(constants.ENCONDING_FORMAT))
+            if len(response) == 2 and response[1] != b'':
+                f_name = file_name(header, command_to_send) 
+                body = response[1]
+                f = open(f_name, 'wb')
+                f.write(body)
+                f.close()
             command_to_send = input()
         client_socket.close() 
-    client_socket.send(bytes(command_to_send,constants.ENCONDING_FORMAT))
-    data_received = client_socket.recv(constants.RECV_BUFFER_SIZE)        
-    print(data_received.decode(constants.ENCONDING_FORMAT))
-    print('Closing connection...BYE BYE...')
-    client_socket.close()    
+    print('BYE BYE...')
 
 
 def file_name (header, request):
-    name = request.split(' ')[1]
-    name = name.split('?')[0]
-    name = name.split('/')
-    name = name[-1]
-    name = ''.join(name.split('.')[:-1])
-
+    name = ''
     header = header.split('\r\n')
+    if '400 Bad Request' in header[0]:
+        name = 'bad_request'
+    else:
+        try:
+            name = request.split(' ')[1]
+            name = name.split('?')[0]
+            name = name.split('/')
+            name = name[-1]
+            name = ''.join(name.split('.')[:-1])
+        except:
+            name = 'name_error'
+        
+    
     mime_type = ''
     for line in header:
         if line.startswith('Content-Type:'):
